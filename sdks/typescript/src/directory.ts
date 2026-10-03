@@ -17,6 +17,15 @@ export interface DirectoryEntry {
   updatedAt: number;
   lastSeen: number;
   sourceUrl?: string;
+  tenantId?: string;
+  verifiedOrg?: {
+    organizationName: string;
+    organizationDomain: string;
+    verifiedLevel: 'official' | 'enterprise' | 'partner';
+    badge: 'blue_v' | 'gold_v';
+    issuer: string;
+    credentialId: string;
+  };
 }
 
 export interface DirectorySearchQuery {
@@ -25,6 +34,8 @@ export interface DirectorySearchQuery {
   relay?: string;
   /** 按归属租户 ID 过滤 */
   tenant?: string;
+  /** 是否只查询具有企业蓝 V / 组织认证的 Agent */
+  verifiedOnly?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -84,7 +95,7 @@ export class DirectoryClient {
     return h;
   }
 
-  private url(path: string, params?: Record<string, string | number | undefined>): string {
+  private url(path: string, params?: Record<string, string | number | boolean | undefined>): string {
     const u = new URL(this.baseUrl + path);
     for (const [k, v] of Object.entries(params ?? {})) {
       if (v !== undefined) u.searchParams.set(k, String(v));

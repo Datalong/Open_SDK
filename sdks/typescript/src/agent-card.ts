@@ -12,6 +12,7 @@
  *   - proof 复用 A2Net 既有的 canonical JSON + Ed25519 签名（非 JSON-LD）
  */
 import { canonicalJson, signMessage, verifySignature, type KeyPair } from './crypto.js';
+import type { VerifiableCredential } from './credentials.js';
 
 /** 接口类型：自然语言接口 / 结构化接口（沿用 ANP-07） */
 export type InterfaceType = 'NaturalLanguageInterface' | 'StructuredInterface';
@@ -84,6 +85,8 @@ export interface AgentCard {
   pricing?: AgentPricing;
   /** A2Net 扩展：能力标签，便于检索 */
   capabilities?: string[];
+  /** A2Net 扩展：企业组织可验证凭据列表 (W3C Verifiable Credentials) */
+  credentials?: VerifiableCredential[];
   information?: AgentInformation[];
   interfaces?: AgentInterface[];
   proof?: AgentCardProof;
@@ -104,6 +107,7 @@ export interface CreateAgentCardOptions {
   relay?: string;
   pricing?: AgentPricing;
   capabilities?: string[];
+  credentials?: VerifiableCredential[];
   information?: AgentInformation[];
   interfaces?: AgentInterface[];
   protocolVersion?: string;
@@ -129,6 +133,7 @@ export function createAgentCard(opts: CreateAgentCardOptions): AgentCard {
     relay: opts.relay,
     pricing: opts.pricing,
     capabilities: opts.capabilities,
+    credentials: opts.credentials,
     information: opts.information,
     interfaces: opts.interfaces,
   };
