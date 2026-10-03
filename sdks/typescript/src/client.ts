@@ -11,6 +11,9 @@ import {
   buildQuery,
   buildError,
   buildResponse,
+  buildBlobInit,
+  buildBlobChunk,
+  buildBlobAck,
   validateMessage,
   ErrorCode,
   type A2Message,
@@ -19,6 +22,13 @@ import {
 } from './protocol.js';
 import { checkPermission, TokenBucket, type PermissionPolicy } from './permissions.js';
 import { decryptFrom, encryptFor, isEncrypted } from './e2ee.js';
+import {
+  BlobTransferManager,
+  splitBlobIntoChunks,
+  type BlobMetadata,
+  type BlobChunk,
+  type CompletedBlob,
+} from './multimodal.js';
 
 export type QueryHandler = (
   query: string,
@@ -98,6 +108,8 @@ export class A2NetClient extends EventEmitter {
   private seenIds = new Set<string>();
   private seenOrder: string[] = [];
   private queryHandler: QueryHandler | null = null;
+  private readonly blobManager = new BlobTransferManager();
+  private blobHandler: ((blob: CompletedBlob, sender: string) => Promise<void> | void) | null = null;
 
   constructor(config: A2NetClientConfig) {
     super();
@@ -264,6 +276,53 @@ export class A2NetClient extends EventEmitter {
     this.queryHandler = handler;
   }
 
+  onBlob(handler: (blob: CompletedBlob, sender: string) => Promise<void> | void): void {
+    this.blobHandler = handler;
+  }
+
+  async sendBlob(
+    targetAddress: string,
+    data: Uint8Array,
+    options: {
+      name?: string;
+      mimeType?: string;
+      chunkSize?: number;
+      onProgress?: (progressPct: number, chunkIndex: number, totalChunks: number) => void;
+    } = {}
+  ): Promise<BlobMetadata> {
+    if (!this.ws || !this.connected) throw new Error('Not connected');
+
+    const name = options.name || 'unnamed.bin';
+    const mimeType = options.mimeType || 'application/octet-stream';
+    const { metadata, chunks } = await splitBlobIntoChunks(data, name, mimeType, options.chunkSize);
+
+    const initPayload = { metadata };
+    const finalInitContent = this.encryptContent
+      ? ((await encryptFor(targetAddress, JSON.stringify(initPayload))) as unknown as Record<string, unknown>)
+      : initPayload;
+    const initMsg = buildBlobInit(this.address, targetAddress, finalInitContent, this.keyPair.privateKey, {
+      e2ee: this.encryptContent,
+    });
+    this.sendRaw(initMsg);
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]!;
+      const chunkPayload = { chunk };
+      const finalChunkContent = this.encryptContent
+        ? ((await encryptFor(targetAddress, JSON.stringify(chunkPayload))) as unknown as Record<string, unknown>)
+        : chunkPayload;
+      const chunkMsg = buildBlobChunk(this.address, targetAddress, finalChunkContent, this.keyPair.privateKey, {
+        e2ee: this.encryptContent,
+      });
+      this.sendRaw(chunkMsg);
+
+      const pct = Math.round(((i + 1) / chunks.length) * 100);
+      options.onProgress?.(pct, i, chunks.length);
+    }
+
+    return metadata;
+  }
+
   private sendAndWait(msg: A2Message, timeoutMs: number): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -324,6 +383,12 @@ export class A2NetClient extends EventEmitter {
       case 'response':
       case 'error':
         this.handleReply(msg);
+        break;
+      case 'blob_init':
+        await this.handleBlobInit(msg);
+        break;
+      case 'blob_chunk':
+        await this.handleBlobChunk(msg);
         break;
     }
   }
@@ -407,6 +472,40 @@ export class A2NetClient extends EventEmitter {
       clearTimeout(req.timer);
       this.pending.delete(replyTo);
       req.reject(new Error(`${ec.code}: ${ec.message}`));
+    }
+  }
+
+  private async handleBlobInit(msg: A2Message): Promise<void> {
+    const content = msg.content as any;
+    if (content?.metadata) {
+      this.blobManager.initSession(msg.from, content.metadata);
+      this.emit('blob_init', { from: msg.from, metadata: content.metadata });
+    }
+  }
+
+  private async handleBlobChunk(msg: A2Message): Promise<void> {
+    const content = msg.content as any;
+    if (content?.chunk) {
+      try {
+        const { session, completedBlob } = await this.blobManager.handleChunk(msg.from, content.chunk);
+        this.emit('blob_progress', {
+          from: msg.from,
+          blobId: session.metadata.blobId,
+          name: session.metadata.name,
+          chunkIndex: content.chunk.chunkIndex,
+          totalChunks: session.metadata.totalChunks,
+          progressPct: session.progressPct,
+        });
+
+        if (completedBlob) {
+          this.emit('blob_completed', completedBlob);
+          if (this.blobHandler) {
+            await this.blobHandler(completedBlob, msg.from);
+          }
+        }
+      } catch (err) {
+        this.emit('blob_error', { from: msg.from, error: (err as Error).message });
+      }
     }
   }
 

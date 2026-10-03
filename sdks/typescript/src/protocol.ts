@@ -11,9 +11,24 @@ function uuidv4(): string {
   return globalThis.crypto.randomUUID();
 }
 
-export type MessageType = 'ping' | 'query' | 'response' | 'error';
+export type MessageType =
+  | 'ping'
+  | 'query'
+  | 'response'
+  | 'error'
+  | 'blob_init'
+  | 'blob_chunk'
+  | 'blob_ack';
 
-export const MESSAGE_TYPES: MessageType[] = ['ping', 'query', 'response', 'error'];
+export const MESSAGE_TYPES: MessageType[] = [
+  'ping',
+  'query',
+  'response',
+  'error',
+  'blob_init',
+  'blob_chunk',
+  'blob_ack',
+];
 
 /** 时间戳有效窗口：5 分钟 */
 export const TIMESTAMP_WINDOW_MS = 5 * 60 * 1000;
@@ -194,6 +209,44 @@ export function buildPing(
 ): A2Message {
   return buildMessage(
     { from, to, type: 'ping', content: { nonce: uuidv4(), capabilities } },
+    privateKey
+  );
+}
+
+export function buildBlobInit(
+  from: string,
+  to: string,
+  content: Record<string, unknown>,
+  privateKey: Uint8Array,
+  extensions?: Record<string, unknown>
+): A2Message {
+  return buildMessage(
+    { from, to, type: 'blob_init', content, extensions },
+    privateKey
+  );
+}
+
+export function buildBlobChunk(
+  from: string,
+  to: string,
+  content: Record<string, unknown>,
+  privateKey: Uint8Array,
+  extensions?: Record<string, unknown>
+): A2Message {
+  return buildMessage(
+    { from, to, type: 'blob_chunk', content, extensions },
+    privateKey
+  );
+}
+
+export function buildBlobAck(
+  from: string,
+  to: string,
+  ack: Record<string, unknown>,
+  privateKey: Uint8Array
+): A2Message {
+  return buildMessage(
+    { from, to, type: 'blob_ack', content: ack },
     privateKey
   );
 }

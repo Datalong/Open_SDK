@@ -13,3 +13,4 @@ export * from './agent-card.js';
 export * from './e2ee.js';
 export * from './directory.js';
 export * from './credentials.js';
+export * from './multimodal.js';
