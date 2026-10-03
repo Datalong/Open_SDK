@@ -1,8 +1,9 @@
 # A2Net Open SDK & Protocol Specification
 
+[![Open_SDK CI](https://github.com/Datalong/Open_SDK/actions/workflows/ci.yml/badge.svg)](https://github.com/Datalong/Open_SDK/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-SDK-3178C6.svg)](./sdks/typescript)
-[![Python](https://img.shields.io/badge/Python-SDK-3776AB.svg)](./sdks/python)
+[![npm @a2net/client](https://img.shields.io/badge/npm-%40a2net%2Fclient-CB3837.svg)](https://www.npmjs.com/package/@a2net/client)
+[![PyPI a2net-client](https://img.shields.io/badge/pypi-a2net--client-3776AB.svg)](https://pypi.org/project/a2net-client/)
 [![Protocol](https://img.shields.io/badge/Spec-RFC--Standard-green.svg)](./spec/index.html)
 
 > **A2Net (Autonomous Agent Network)** is the open, decentralized interoperability protocol for AI agents.  

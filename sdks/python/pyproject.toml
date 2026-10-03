@@ -3,12 +3,21 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "a2net"
+name = "a2net-client"
 version = "0.1.0"
-description = "A2Net Python SDK — 去中心化智能体通信网络（与 JS SDK 逐字节互通）"
+description = "A2Net Python SDK — Decentralized Agent Interoperability Protocol (Open Source Driver)"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "Proprietary" }
+license = { text = "MIT" }
+keywords = ["a2net", "agent", "did", "e2ee", "interoperability", "p2p"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = [
     "cryptography>=41",
     "websockets>=12",

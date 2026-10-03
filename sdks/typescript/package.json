@@ -6,6 +6,34 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "a2net",
+    "agent",
+    "did",
+    "e2ee",
+    "interoperability",
+    "p2p",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Datalong/Open_SDK.git",
+    "directory": "sdks/typescript"
+  },
+  "homepage": "https://github.com/Datalong/Open_SDK#readme",
+  "bugs": {
+    "url": "https://github.com/Datalong/Open_SDK/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

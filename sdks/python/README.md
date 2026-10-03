@@ -1,12 +1,12 @@
 # A2Net Python SDK
 
-去中心化智能体通信网络的 Python 端实现。**与 [JS SDK](../a2net-sdk) 逐字节互通**——
+去中心化智能体通信网络的 Python 端实现。**与 [TS SDK](../typescript) 逐字节互通**——
 同一套 `did:key` 地址、canonical JSON 签名规范、消息格式、Agent Card 与端到端加密。
 
 ## 安装
 
 ```bash
-pip install a2net
+pip install a2net-client
 ```
 
 在本仓库内开发时：
