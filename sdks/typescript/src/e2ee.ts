@@ -16,6 +16,7 @@ import { hkdf } from '@noble/hashes/hkdf';
 import { sha256, sha512 } from '@noble/hashes/sha2';
 import { randomBytes } from '@noble/hashes/utils';
 import { publicKeyFromAddress } from './crypto.js';
+import { nativeX25519, nativeX25519PublicKey, nativeX25519KeyPair } from './native-crypto.js';
 
 export const E2EE_ALG = 'X25519-HKDF-SHA256-AES-256-GCM';
 const HKDF_INFO = 'a2net-e2ee-v1';
@@ -84,9 +85,35 @@ export function ed25519PrivToX25519(seed: Uint8Array): Uint8Array {
   return a;
 }
 
-/** 由 did:key 地址直接得到该 Agent 的 X25519 加密公钥 */
+/**
+ * X25519 ECDH：优先走 Node 原生 OpenSSL（约 20µs），否则回退到纯 JS（约 670µs）。
+ */
+function sharedSecret(privateKey: Uint8Array, publicKey: Uint8Array): Uint8Array {
+  return nativeX25519(privateKey, publicKey) ?? x25519.getSharedSecret(privateKey, publicKey);
+}
+
+/**
+ * X25519 公钥推导：优先原生（约 30µs），否则纯 JS（约 600µs）。
+ */
+function x25519PublicKey(privateKey: Uint8Array): Uint8Array {
+  return nativeX25519PublicKey(privateKey) ?? x25519.getPublicKey(privateKey);
+}
+
+/** did:key → X25519 公钥的转换结果缓存（纯数学，对同一地址恒定） */
+const x25519PubCache = new Map<string, Uint8Array>();
+const X25519_PUB_CACHE_LIMIT = 4096;
+
+/** 由 did:key 地址直接得到该 Agent 的 X25519 加密公钥（带缓存） */
 export function encryptionPublicKeyFromAddress(address: string): Uint8Array {
-  return ed25519PubToX25519(publicKeyFromAddress(address));
+  const cached = x25519PubCache.get(address);
+  if (cached) return cached;
+  const pub = ed25519PubToX25519(publicKeyFromAddress(address));
+  if (x25519PubCache.size >= X25519_PUB_CACHE_LIMIT) {
+    const first = x25519PubCache.keys().next();
+    if (!first.done) x25519PubCache.delete(first.value);
+  }
+  x25519PubCache.set(address, pub);
+  return pub;
 }
 
 function toB64(b: Uint8Array): string {
@@ -131,9 +158,22 @@ export async function encryptFor(
   ephemeralSeed?: Uint8Array
 ): Promise<EncryptedEnvelope> {
   const recipientPub = encryptionPublicKeyFromAddress(recipientAddress);
-  const ephPriv = ephemeralSeed ? ed25519PrivToX25519(ephemeralSeed) : x25519.utils.randomSecretKey();
-  const ephPub = x25519.getPublicKey(ephPriv);
-  const shared = x25519.getSharedSecret(ephPriv, recipientPub);
+  let ephPriv: Uint8Array;
+  let ephPub: Uint8Array;
+  if (ephemeralSeed) {
+    ephPriv = ed25519PrivToX25519(ephemeralSeed);
+    ephPub = x25519PublicKey(ephPriv);
+  } else {
+    const native = nativeX25519KeyPair();
+    if (native) {
+      ephPriv = native.privateKey;
+      ephPub = native.publicKey;
+    } else {
+      ephPriv = x25519.utils.randomSecretKey();
+      ephPub = x25519.getPublicKey(ephPriv);
+    }
+  }
+  const shared = sharedSecret(ephPriv, recipientPub);
   const key = deriveKey(shared, ephPub, recipientPub);
 
   const iv = randomBytes(12);
@@ -157,9 +197,9 @@ export async function decryptFrom(
   if (!senderAddress.startsWith('did:key:')) throw new Error('senderAddress 必须是 did:key 地址');
   const recipientPriv = ed25519PrivToX25519(recipientPrivateKey);
   // 收件人自己算 X25519 公钥，保证与发送方的 HKDF salt 一致
-  const recipientPub = x25519.getPublicKey(recipientPriv);
+  const recipientPub = x25519PublicKey(recipientPriv);
   const epk = fromB64(envelope.epk);
-  const shared = x25519.getSharedSecret(recipientPriv, epk);
+  const shared = sharedSecret(recipientPriv, epk);
   const key = deriveKey(shared, epk, recipientPub);
   const pt = await aesGcmDecrypt(key, fromB64(envelope.iv), fromB64(envelope.ct));
   return new TextDecoder().decode(pt);

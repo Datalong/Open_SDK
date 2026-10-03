@@ -77,6 +77,14 @@ export class TokenBucket {
 // 策略校验
 // ---------------------------------------------------------------------------
 
+/**
+ * 默认入站限流：每个发送方 600 次 / 分钟（10 req/s，突发 600）。
+ *
+ * 说明：这是接收方本地保护措施（中继不参与）。默认值需高于典型 Agent 服务能力，
+ * 否则会先于中继成为瓶颈；需要更高吞吐时可通过 policy.rules 显式放宽。
+ */
+export const DEFAULT_INBOUND_RATE_LIMIT: RateLimit = { max: 600, windowSec: 60 };
+
 export interface CheckContext {
   sender: string;
   /** 请求 scope，缺省视为 knowledge.public */
@@ -113,7 +121,7 @@ export function checkPermission(
   }
 
   // 4. 限流
-  const limit = rule?.rateLimit ?? { max: 10, windowSec: 60 };
+  const limit = rule?.rateLimit ?? DEFAULT_INBOUND_RATE_LIMIT;
   const key = `${ctx.sender}:${rule ? 'rule' : 'default'}`;
   if (!bucket.consume(key, limit, now)) {
     return {

@@ -13,7 +13,14 @@ from .agent_card import (
     verify_agent_card,
 )
 from .client import A2NetClient, PermissionPolicy
-from .integrations import HttpAgentBridge, a2net_agent
+from .integrations import (
+    A2NetCrewAITool,
+    A2NetLangChainTool,
+    A2NetLlamaIndexToolSpec,
+    HttpAgentBridge,
+    a2net_agent,
+    expose,
+)
 from .crypto import (
     DID_PREFIX,
     SIGN_FIELDS,
