@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A2Net 协议规范 v0.1</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --border:#30363d; --fg:#e6edf3;
+    --muted:#8b949e; --accent:#58a6ff; --green:#3fb950; --amber:#d29922;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB",sans-serif}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:grid;grid-template-columns:260px 1fr;max-width:1180px;margin:0 auto}
+  nav{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;
+    padding:28px 20px;border-right:1px solid var(--border)}
+  nav h1{font-size:17px;margin:0 0 4px}
+  nav .ver{color:var(--muted);font-size:12px;margin-bottom:20px}
+  nav a{display:block;color:var(--muted);font-size:14px;padding:4px 0}
+  nav a:hover{color:var(--fg);text-decoration:none}
+  nav .group{margin-top:16px;color:var(--fg);font-size:12px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.06em;opacity:.55}
+  main{padding:48px 56px;min-width:0}
+  h2{font-size:26px;margin:56px 0 14px;padding-top:16px;border-top:1px solid var(--border)}
+  h2:first-child{border:0;margin-top:0;padding-top:0}
+  h3{font-size:18px;margin:28px 0 10px}
+  p{color:#c9d1d9}
+  code{font-family:var(--mono);font-size:.86em;background:#21262d;padding:2px 6px;border-radius:5px}
+  pre{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.6}
+  pre code{background:none;padding:0;font-size:inherit}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  td code{font-size:12.5px}
+  .tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:20px;
+    border:1px solid var(--border);color:var(--muted)}
+  .req{color:var(--amber);font-size:11px;font-weight:700}
+  .opt{color:var(--muted);font-size:11px}
+  .note{border-left:3px solid var(--accent);background:#0f1a2a;padding:12px 16px;
+    border-radius:0 8px 8px 0;margin:16px 0;color:#c9d1d9;font-size:14.5px}
+  .warn{border-left-color:var(--amber);background:#211c0f}
+  .ok{border-left-color:var(--green);background:#0f2216}
+  .lead{font-size:17px;color:#c9d1d9}
+  .badge{background:var(--panel);border:1px solid var(--border);border-radius:20px;
+    padding:2px 10px;font-size:12px;color:var(--muted);margin-right:6px}
+  footer{color:var(--muted);font-size:13px;margin:64px 0 24px;
+    padding-top:20px;border-top:1px solid var(--border)}
+  @media(max-width:820px){.wrap{grid-template-columns:1fr}
+    nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--border)}
+    nav a{display:inline-block;margin-right:14px}.group{display:block}
+    main{padding:28px 20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <h1>A2Net</h1>
+  <div class="ver">协议规范 · v0.1 (Draft)</div>
+  <div class="group">基础</div>
+  <a href="#overview">0. 概述与范围</a>
+  <a href="#identity">1. 身份标识</a>
+  <a href="#message">2. 消息格式</a>
+  <a href="#signature">3. 规范化与签名</a>
+  <div class="group">协议</div>
+  <a href="#types">4. 消息类型</a>
+  <a href="#errors">5. 错误码</a>
+  <a href="#permissions">6. 权限模型</a>
+  <a href="#extensions">7. 扩展与命名空间</a>
+  <div class="group">网络与安全</div>
+  <a href="#relay">8. 中继协议</a>
+  <a href="#discovery">9. 发现与寻址</a>
+  <a href="#payment">10. 支付</a>
+  <a href="#recovery">11. 身份恢复</a>
+  <a href="#security">12. 安全考量</a>
+  <a href="#versioning">13. 版本与兼容</a>
+</nav>
+<main>
+  <p class="lead" style="margin-top:0">
+    <span class="badge">规范公开</span><span class="badge">自由实现</span><span class="badge">端到端可验证</span>
+  </p>
+  <h1 style="font-size:34px;margin:8px 0 6px">A2Net 协议规范</h1>
+  <p class="lead">一个去中心化的智能体互通协议。本规范只定义<b>协议标准、身份与权限、中继路由、经济原语</b>，
+  不定义智能体本身，也不接触用户明文数据。</p>
+
+  <h2 id="overview">0. 概述与范围</h2>
+  <p>A2Net 在智能体之间提供可验证、可寻址、可选计费的消息通道，类似智能体世界的 TCP/IP。
+  协议分为四层：</p>
+  <table>
+    <tr><th>层</th><th>职责</th><th>本文档章节</th></tr>
+    <tr><td>身份层</td><td>DID 标识、密钥、恢复</td><td>§1, §11</td></tr>
+    <tr><td>消息层</td><td>消息结构、签名、类型</td><td>§2–§5</td></tr>
+    <tr><td>传输层</td><td>中继路由、发现、P2P 直连</td><td>§8, §9</td></tr>
+    <tr><td>经济层</td><td>Lightning 微支付、质押</td><td>§10</td></tr>
+  </table>
+  <div class="note">规范中的 <b>MUST/必须</b>、<b>SHOULD/建议</b>、<b>MAY/可选</b> 遵循 RFC 2119 语义。</div>
+
+  <h2 id="identity">1. 身份标识</h2>
+  <p>每个智能体拥有一个由 Ed25519 密钥对派生的 DID。地址即公钥，无需注册机构。</p>
+  <pre><code>did:key:z{Base58(Ed25519 公钥 32 字节)}
+
+示例：did:key:z6Mkf5rGMoatrSj1f4CyvuHBeXJELe9RPdzo2PKGNCKVtZx</code></pre>
+  <ul>
+    <li>公钥：Ed25519，32 字节。</li>
+    <li>编码：32 字节裸公钥直接 Base58（<code>z</code> 前缀），不做 multicodec 包装（v0.1 简化，v0.2 迁移到标准 <code>did:key</code>）。</li>
+    <li>私钥：32 字节，<b>永不传输</b>。</li>
+    <li>地址大小写敏感，比较时 MUST 精确匹配。</li>
+  </ul>
+  <div class="warn note">v0.1 的 <code>did:key:z</code> 与 W3C 标准 <code>did:key</code>（含 <code>0xed01</code> multicodec）<b>不兼容</b>。互操作时以本规范为准；v0.2 计划迁移并保留双解析。</div>
+
+  <h2 id="message">2. 消息格式</h2>
+  <p>一条消息是一个 JSON 对象，分为三段：<b>身份段 / 请求段 / 回复段</b>。</p>
+  <table>
+    <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+    <tr><td><code>id</code> <span class="req">MUST</span></td><td>string</td><td>UUIDv4，消息唯一标识（幂等键）</td></tr>
+    <tr><td><code>from</code> <span class="req">MUST</span></td><td>string</td><td>发送方 DID</td></tr>
+    <tr><td><code>to</code> <span class="req">MUST</span></td><td>string</td><td>接收方 DID，或 <code>"*"</code> 表示广播</td></tr>
+    <tr><td><code>type</code> <span class="req">MUST</span></td><td>string</td><td>消息类型，见 §4</td></tr>
+    <tr><td><code>content</code> <span class="req">MUST</span></td><td>object</td><td>载荷，结构由 type 决定</td></tr>
+    <tr><td><code>timestamp</code> <span class="req">MUST</span></td><td>number</td><td>Unix 毫秒</td></tr>
+    <tr><td><code>signature</code> <span class="req">MUST</span></td><td>string</td><td>Base64(Ed25519 签名)，见 §3</td></tr>
+    <tr><td><code>extensions</code> <span class="opt">MAY</span></td><td>object</td><td>命名空间扩展，见 §7</td></tr>
+  </table>
+  <pre><code>{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "from": "did:key:z6Mkf...",
+  "to": "did:key:z9Abc...",
+  "type": "query",
+  "content": { "query": "什么是 A2Net？" },
+  "timestamp": 1700000000000,
+  "signature": "MEUCIQ...",
+  "extensions": {}
+}</code></pre>
+  <div class="note">超过 256 KB 的消息 MUST 被中继拒绝（错误 <code>4032</code>）。大文件走 <code>a2net.file.v1</code> 扩展的分片传输。</div>
+
+  <h2 id="signature">3. 规范化与签名</h2>
+  <p>签名对象是身份段与请求段的核心六字段，<b>按字典序排序 key</b> 后序列化。</p>
+  <h3>3.1 规范化（canonical JSON）</h3>
+  <ol>
+    <li>取字段：<code>id, from, to, type, content, timestamp</code>。</li>
+    <li>所有对象递归按 key 字典序排序。</li>
+    <li>序列化为紧凑 JSON（无多余空白）。</li>
+    <li>UTF-8 编码为字节串。</li>
+  </ol>
+  <pre><code>{content:{"q":"hi"},from:"did:key:zA",id:"...",timestamp:1,to:"did:key:zB",type:"query"}</code></pre>
+  <h3>3.2 签名</h3>
+  <pre><code>signature = Base64( Ed25519_Sign( privateKey, canonicalBytes ) )</code></pre>
+  <h3>3.3 验签</h3>
+  <ol>
+    <li>校验 <code>from</code> 是合法 DID 格式。</li>
+    <li>从 <code>from</code> 解码公钥。</li>
+    <li>用同一规范化函数重算字节串。</li>
+    <li>Ed25519 验签，失败则丢弃消息（错误 <code>4002</code>）。</li>
+  </ol>
+  <div class="warn note">MUST NOT 把 <code>signature</code> 或 <code>extensions</code> 纳入签名对象（否则无法前向兼容扩展）。<code>content</code> 内部的 key 顺序<b>会</b>影响签名，实现 MUST 使用同一排序算法。时间是弱约束：允许 ±5 分钟时钟偏移。</div>
+
+  <h2 id="types">4. 消息类型</h2>
+  <table>
+    <tr><th>type</th><th>方向</th><th>content 结构</th></tr>
+    <tr><td><code>ping</code></td><td>双向</td><td><code>{}</code> 或 <code>{ scope? }</code>；探测存活/能力</td></tr>
+    <tr><td><code>query</code></td><td>请求</td><td><code>{ query: string, scope?: {type:string}, params?: object }</code></td></tr>
+    <tr><td><code>response</code></td><td>回复</td><td><code>{ reply_to: string, result: any, error?: {code,message} }</code></td></tr>
+    <tr><td><code>error</code></td><td>回复</td><td><code>{ code: number, message: string, reply_to?: string }</code></td></tr>
+  </table>
+  <div class="note"><code>response.reply_to</code> MUST 等于原 <code>query.id</code>，用于请求-应答匹配、去重与超时统计。</div>
+
+  <h2 id="errors">5. 错误码</h2>
+  <table>
+    <tr><th>码</th><th>含义</th><th>触发</th></tr>
+    <tr><td><code>4001</code></td><td>消息格式错误</td><td>JSON 解析失败 / 缺必填字段</td></tr>
+    <tr><td><code>4002</code></td><td>签名无效</td><td>验签失败</td></tr>
+    <tr><td><code>4031</code></td><td>无权限</td><td>不在白名单 / 被拉黑 / scope 不匹配</td></tr>
+    <tr><td><code>4032</code></td><td>超出限制</td><td>消息过大 / 超出频率配额</td></tr>
+    <tr><td><code>4041</code></td><td>目标不可达</td><td>接收方离线且无中继路径</td></tr>
+    <tr><td><code>5001</code></td><td>内部错误</td><td>处理失败</td></tr>
+    <tr><td><code>5040</code></td><td>超时</td><td>请求超时未应答</td></tr>
+  </table>
+
+  <h2 id="permissions">6. 权限模型</h2>
+  <p>每个智能体本地维护对外的授权策略，决策不依赖中心服务器。</p>
+  <table>
+    <tr><th>维度</th><th>说明</th></tr>
+    <tr><td>知识 <code>knowledge</code></td><td>可回答的 scope 列表（如 <code>cooking.public</code>）</td></tr>
+    <tr><td>工具 <code>tool</code></td><td>可调用的工具名列表</td></tr>
+    <tr><td>频率 <code>frequency</code></td><td>每窗口最大请求数（如 10 次/分钟）</td></tr>
+    <tr><td>白名单 <code>whitelist</code></td><td>显式允许的 DID</td></tr>
+    <tr><td>黑名单 <code>blacklist</code></td><td>显式拒绝的 DID</td></tr>
+  </table>
+  <pre><code>{
+  "knowledge": ["cooking.public"],
+  "tool": ["weather.get"],
+  "frequency": { "limit": 10, "windowMs": 60000 },
+  "whitelist": ["did:key:z6Mkf..."],
+  "blacklist": []
+}</code></pre>
+  <div class="note">决策顺序：黑名单 → 白名单 → 频率 → scope。拒绝时回复 <code>4031</code>/<code>4032</code>，MUST NOT 泄露策略细节。</div>
+
+  <h2 id="extensions">7. 扩展与命名空间</h2>
+  <p>扩展放在 <code>extensions</code>，key 使用反向域名式命名空间，避免冲突。中继 MUST 原样透传，MUST NOT 解析。</p>
+  <table>
+    <tr><th>命名空间</th><th>用途</th></tr>
+    <tr><td><code>a2net.tool_call.v1</code></td><td>工具调用</td></tr>
+    <tr><td><code>a2net.task.v1</code></td><td>长任务编排</td></tr>
+    <tr><td><code>a2net.file.v1</code></td><td>文件分片传输</td></tr>
+    <tr><td><code>a2net.stream.v1</code></td><td>流式分片（带 <code>seq</code>/<code>done</code>）</td></tr>
+    <tr><td><code>a2net.payment.v1</code></td><td>支付凭证与 hold invoice 协商</td></tr>
+  </table>
+  <pre><code>"extensions": {
+  "a2net.stream.v1": { "seq": 3, "done": false },
+  "a2net.payment.v1": { "paymentHash": "ab12...", "amountSat": 50 }
+}</code></pre>
+
+  <h2 id="relay">8. 中继协议</h2>
+  <p>中继是一个 WebSocket 服务，只做路由与限流，<b>不验签、不解密、不落盘</b>。</p>
+  <h3>8.1 连接与注册</h3>
+  <pre><code>// 客户端 → 中继
+{ "type": "register", "address": "did:key:z6Mkf..." }
+// 中继 → 客户端
+{ "type": "register_ack", "address": "did:key:z6Mkf..." }</code></pre>
+  <h3>8.2 心跳</h3>
+  <pre><code>// 客户端 → 中继（无 to 字段，区别于业务 ping）
+{ "type": "ping", "timestamp": 1700000000000 }
+// 中继 → 客户端
+{ "type": "pong", "timestamp": 1700000000000 }</code></pre>
+  <h3>8.3 转发</h3>
+  <p>带 <code>to</code> 的消息按 <code>to</code> 转发；<code>to:"*"</code> 广播给所有在线方（排除发送方）。目标离线返回 <code>4041</code>。</p>
+  <div class="note">中继控制消息（register/ping/pong/register_ack）<b>不是</b> A2Net 业务消息，无签名、无 from/to。<code>ping</code> 是否需要回 pong 由是否携带 <code>to</code> 判定。</div>
+  <div class="warn note">中继可见元数据（收发方、时间、大小、频率）。内容保密需端到端加密（v0.2），中继对此不做承诺。</div>
+
+  <h2 id="discovery">9. 发现与寻址</h2>
+  <table>
+    <tr><th>方式</th><th>阶段</th><th>说明</th></tr>
+    <tr><td>中继地址簿</td><td>v0.1</td><td>在线连接的内存表，断线即移除</td></tr>
+    <tr><td>种子节点</td><td>v0.1</td><td>官方 1–3 个已知中继，客户端硬编码引导</td></tr>
+    <tr><td>DHT / rendezvous</td><td>v0.2</td><td>libp2p Kademlia，去中心化发现</td></tr>
+    <tr><td>P2P 直连</td><td>v0.2</td><td>STUN hole-punch，失败回退中继</td></tr>
+  </table>
+
+  <h2 id="payment">10. 支付（Lightning）</h2>
+  <p>用 hold invoice 提供原子性：<b>不交付则收不到钱，不付款则拿不到结果</b>。</p>
+  <pre><code>1. 收款方 B 生成 hold invoice（preimage 本地保管），返回 bolt11 给 A
+2. A 支付 → HTLC 被接受但未结算（状态 in_flight）
+3. B 执行任务并返回结果
+4. A 校验结果 → B settle（reveal preimage）→ A 获得凭证
+5. B 超时未交付 → cancel / 过期 → 资金退回 A</code></pre>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td><code>paymentHash</code></td><td>32 字节 SHA256(preimage)，同时是幂等键</td></tr>
+    <tr><td><code>amountSat</code></td><td>金额（satoshi）</td></tr>
+    <tr><td><code>bolt11</code></td><td>BOLT11 支付请求，短窗口有效</td></tr>
+  </table>
+
+  <h2 id="recovery">11. 身份恢复</h2>
+  <p>身份即私钥，丢失不可逆，因此协议要求多层恢复。默认主权方案：</p>
+  <table>
+    <tr><th>机制</th><th>说明</th></tr>
+    <tr><td>M1 助记词</td><td>BIP39 12 词离线手抄</td></tr>
+    <tr><td>M2 加密密钥库</td><td>Argon2id + AES-256-GCM，可存云盘</td></tr>
+    <tr><td>M3 社交恢复</td><td>Shamir (k=3, n=5) over GF(256)，分片交 5 个 guardian</td></tr>
+    <tr><td>M4 可选托管</td><td>2-of-3 MPC / HSM，默认关闭</td></tr>
+  </table>
+  <div class="note">恢复时用客户端生成的挑战 nonce 防重放；guardian 二次确认新设备地址，防钓鱼恢复。</div>
+
+  <h2 id="security">12. 安全考量</h2>
+  <ul>
+    <li><b>验签位置</b>：端点验签，中继不验签（成本与信任假设）。</li>
+    <li><b>重放</b>：<code>id</code> 去重 + <code>timestamp</code> 窗口 ±5 分钟。</li>
+    <li><b>Sybil</b>：邀请 + 轻量 PoW + 声誉，无许可但有成本。</li>
+    <li><b>元数据</b>：默认不记日志；v0.2 提供 E2E 加密与定长填充。</li>
+    <li><b>传输</b>：生产 MUST 使用 <code>wss://</code>。</li>
+    <li><b>结果验证</b>：v0.1 靠声誉 + 质押；v0.2 抽样审计 + 人工仲裁。</li>
+  </ul>
+
+  <h2 id="versioning">13. 版本与兼容</h2>
+  <ul>
+    <li>协议版本走 <code>v0.x</code>；破坏性变更升 minor，向后兼容升 patch。</li>
+    <li>扩展命名空间自带版本号（<code>.v1</code>），可并行多版本。</li>
+    <li>未知 <code>extensions</code> MUST 忽略而非报错。</li>
+    <li>未知 <code>type</code> SHOULD 回 <code>4001</code>。</li>
+  </ul>
+
+  <footer>
+    A2Net Protocol Specification v0.1 · 协议规范公开中立，可自由实现 ·
+    配套文档：<a href="../docs/01-technical-design.md">技术设计</a> ·
+    <a href="../docs/02-mvp-plan.md">MVP 计划</a> ·
+    <a href="../docs/04-technical-challenges.md">难点方案</a>
+  </footer>
+</main>
+</div>
+</body>
+</html>

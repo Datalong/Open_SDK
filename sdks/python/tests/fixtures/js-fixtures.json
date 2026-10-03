@@ -1,0 +1,81 @@
+{
+  "seedA": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "addressA": "did:key:z9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj",
+  "addressB": "did:key:z6NZhMNkbGuWAb94fg661oR8xsBCvhczzMosEFP5fLPZM",
+  "canonicalJsonInput": {
+    "b": [
+      1,
+      2,
+      {
+        "z": null,
+        "a": "中文"
+      }
+    ],
+    "a": {
+      "y": true,
+      "x": 1730000000000
+    }
+  },
+  "canonicalJsonSample": "{\"a\":{\"x\":1730000000000,\"y\":true},\"b\":[1,2,{\"a\":\"中文\",\"z\":null}]}",
+  "message": {
+    "id": "4acf88bb-edaf-4a57-90ec-33eb9c8cb70b",
+    "from": "did:key:z9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj",
+    "to": "did:key:z6NZhMNkbGuWAb94fg661oR8xsBCvhczzMosEFP5fLPZM",
+    "type": "query",
+    "content": {
+      "query": "你好，Python",
+      "scope": {
+        "type": "task",
+        "max_tokens": 128
+      }
+    },
+    "timestamp": 1730000000000,
+    "signature": "agBKrznPGwAomG0pNm/jIFlGeA8d/Enpl59KbD00kdJzkt2xTOEcPk0a/OR0FZyJV1HiN4PRFtt+aXuF3i2lBA=="
+  },
+  "agentCard": {
+    "protocolType": "A2Net",
+    "protocolVersion": "1.0.0",
+    "type": "AgentDescription",
+    "url": "https://js.example.com/.well-known/agent-description.json",
+    "name": "JS 端助手",
+    "did": "did:key:z9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj",
+    "description": "由 JS SDK 生成",
+    "created": "2026-10-01T16:15:50.490Z",
+    "securityDefinitions": {
+      "a2net_message": {
+        "scheme": "ed25519",
+        "in": "header",
+        "name": "X-A2Net-Signature"
+      }
+    },
+    "security": "a2net_message",
+    "relay": "wss://relay.a2net.io",
+    "pricing": {
+      "unit": "sat",
+      "amount": 100
+    },
+    "capabilities": [
+      "poetry"
+    ],
+    "interfaces": [
+      {
+        "type": "NaturalLanguageInterface",
+        "protocol": "A2Net"
+      }
+    ],
+    "proof": {
+      "type": "Ed25519Signature2020",
+      "created": "2025-01-01T00:00:00.000Z",
+      "proofPurpose": "assertionMethod",
+      "verificationMethod": "did:key:z9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj",
+      "signatureValue": "KnaoXBAKgCuKnUIWuYmoonqxH6cydUcj4N/z/gGUrz3GUV3xvxRbTOn/5GNoglbP45MsGVKPwfMrfakkdrLYDg=="
+    }
+  },
+  "envelope": {
+    "alg": "X25519-HKDF-SHA256-AES-256-GCM",
+    "epk": "Dr+YCoYN5Ryi4IBvQfUnZiTuGuTOI5/LctGwKNt+OR4=",
+    "iv": "32lCbhB4nuMQrTXC",
+    "ct": "ha9sVa5HddQAk+hvRGo4wxttBUIy81mOhiB+Mk6gokNiFQY="
+  },
+  "plaintext": "来自 JS 的密文"
+}

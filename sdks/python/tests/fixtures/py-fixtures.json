@@ -1,0 +1,84 @@
+{
+  "address": "did:key:z9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj",
+  "addressB": "did:key:z6NZhMNkbGuWAb94fg661oR8xsBCvhczzMosEFP5fLPZM",
+  "canonicalJsonInput": {
+    "b": [
+      1,
+      2,
+      {
+        "z": null,
+        "a": "中文"
+      }
+    ],
+    "a": {
+      "y": true,
+      "x": 1730000000000
+    }
+  },
+  "canonicalJsonSample": "{\"a\":{\"x\":1730000000000,\"y\":true},\"b\":[1,2,{\"a\":\"中文\",\"z\":null}]}",
+  "signString": "{\"content\":{\"query\":\"你好，JS\",\"scope\":{\"max_tokens\":128,\"type\":\"task\"}},\"from\":\"did:key:z9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj\",\"id\":\"3270e4b5-a99d-4bd1-ad79-d3fc12843b23\",\"timestamp\":1730000000000,\"to\":\"did:key:z6NZhMNkbGuWAb94fg661oR8xsBCvhczzMosEFP5fLPZM\",\"type\":\"query\"}",
+  "message": {
+    "id": "3270e4b5-a99d-4bd1-ad79-d3fc12843b23",
+    "from": "did:key:z9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj",
+    "to": "did:key:z6NZhMNkbGuWAb94fg661oR8xsBCvhczzMosEFP5fLPZM",
+    "type": "query",
+    "content": {
+      "query": "你好，JS",
+      "scope": {
+        "type": "task",
+        "max_tokens": 128
+      }
+    },
+    "timestamp": 1730000000000,
+    "signature": "Z9km3dIRHxJ0RNvcTB3Fs5q/LaBs7ikoLgTAfjA2dV122V4SLaa5PaVHaj2OMkR9Mbwclh3UkLU+029FUVfHAg=="
+  },
+  "agentCard": {
+    "protocolType": "A2Net",
+    "protocolVersion": "1.0.0",
+    "type": "AgentDescription",
+    "url": "https://py.example.com/.well-known/agent-description.json",
+    "name": "Python 端助手",
+    "did": "did:key:z9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj",
+    "description": "由 Python SDK 生成",
+    "created": "2026-10-01T16:15:50.000Z",
+    "securityDefinitions": {
+      "a2net_message": {
+        "scheme": "ed25519",
+        "in": "header",
+        "name": "X-A2Net-Signature"
+      }
+    },
+    "security": "a2net_message",
+    "relay": "wss://relay.a2net.io",
+    "pricing": {
+      "unit": "sat",
+      "amount": 100
+    },
+    "capabilities": [
+      "poetry"
+    ],
+    "interfaces": [
+      {
+        "type": "NaturalLanguageInterface",
+        "protocol": "A2Net"
+      }
+    ],
+    "proof": {
+      "type": "Ed25519Signature2020",
+      "created": "2025-01-01T00:00:00.000Z",
+      "proofPurpose": "assertionMethod",
+      "verificationMethod": "did:key:z9C6hybhQ6Aycep9jaUnP6uL9ZYvDjUp1aSkFWPUFJtpj",
+      "signatureValue": "Zp9Fk0SwFFzspvsfvPENDZMlyYeBp5vEwZHT6P0ROeBke3k+xjBHYCO2t2HnLYIoMXCtau7qw7OOZJlXPxCPDA=="
+    }
+  },
+  "envelope": {
+    "alg": "X25519-HKDF-SHA256-AES-256-GCM",
+    "epk": "SjgH0GTQdxgcwHCYnnaJHSDcpVWVSNwsd8GlAnOIKzg=",
+    "iv": "dRj5gxvLm66xOoFp",
+    "ct": "r/jUckTl4JnHpgxP26dbYw1/hkYoAC0LuCzgtaQfPC49EFT8Esc3"
+  },
+  "plaintext": "来自 Python 的密文",
+  "crossCheck": {
+    "signature": "Z9km3dIRHxJ0RNvcTB3Fs5q/LaBs7ikoLgTAfjA2dV122V4SLaa5PaVHaj2OMkR9Mbwclh3UkLU+029FUVfHAg=="
+  }
+}

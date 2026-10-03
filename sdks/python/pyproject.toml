@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "a2net"
+version = "0.1.0"
+description = "A2Net Python SDK — 去中心化智能体通信网络（与 JS SDK 逐字节互通）"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Proprietary" }
+dependencies = [
+    "cryptography>=41",
+    "websockets>=12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+include = ["a2net*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
