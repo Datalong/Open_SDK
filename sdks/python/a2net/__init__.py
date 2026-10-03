@@ -42,12 +42,29 @@ from .protocol import (
     MESSAGE_TYPES,
     TIMESTAMP_WINDOW_MS,
     ErrorCode,
+    build_blob_ack,
+    build_blob_chunk,
+    build_blob_init,
     build_error,
     build_message,
     build_query,
     build_response,
     is_valid,
     validate_message,
+)
+from .multimodal import (
+    DEFAULT_CHUNK_SIZE,
+    BlobChunk,
+    BlobIntegrityError,
+    BlobMetadata,
+    BlobTransferManager,
+    BlobTransferSession,
+    CompletedBlob,
+    CorruptedChunkError,
+    base64_to_bytes,
+    bytes_to_base64,
+    compute_sha256_hex,
+    split_blob_into_chunks,
 )
 
 __version__ = "0.1.0"
@@ -71,6 +88,9 @@ __all__ = [
     "MESSAGE_TYPES",
     "TIMESTAMP_WINDOW_MS",
     "ErrorCode",
+    "build_blob_ack",
+    "build_blob_chunk",
+    "build_blob_init",
     "build_error",
     "build_message",
     "build_query",
@@ -98,4 +118,17 @@ __all__ = [
     # integrations
     "HttpAgentBridge",
     "a2net_agent",
+    # multimodal
+    "DEFAULT_CHUNK_SIZE",
+    "BlobChunk",
+    "BlobIntegrityError",
+    "BlobMetadata",
+    "BlobTransferManager",
+    "BlobTransferSession",
+    "CompletedBlob",
+    "CorruptedChunkError",
+    "base64_to_bytes",
+    "bytes_to_base64",
+    "compute_sha256_hex",
+    "split_blob_into_chunks",
 ]

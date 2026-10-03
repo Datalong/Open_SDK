@@ -1,0 +1,30 @@
+{
+  "name": "a2net-open-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A2Net Open SDK & Protocol Specification — monorepo workspace root",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "sdks/typescript"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=@a2net/client",
+    "test": "npm test --workspace=@a2net/client",
+    "test:py": "python3 -m pytest sdks/python",
+    "test:all": "npm run test && npm run test:py",
+    "example:ts": "tsx examples/typescript-quickstart.ts",
+    "example:ts:multimodal": "tsx examples/typescript-multimodal.ts",
+    "example:py": "python3 examples/python-quickstart.py",
+    "example:py:multimodal": "python3 examples/python-multimodal.py"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "ws": "^8.17.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

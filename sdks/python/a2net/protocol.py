@@ -15,7 +15,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from .crypto import get_sign_string, sign_message, verify_signature
 
-MESSAGE_TYPES = ("ping", "query", "response", "error")
+MESSAGE_TYPES = ("ping", "query", "response", "error", "blob_init", "blob_chunk", "blob_ack")
 
 #: 时间戳有效窗口：5 分钟
 TIMESTAMP_WINDOW_MS = 5 * 60 * 1000
@@ -109,6 +109,38 @@ def build_error(
     if retry_after is not None:
         content["retry_after"] = retry_after
     return build_message(request["to"], request["from"], "error", content, private_key)
+
+
+def build_blob_init(
+    sender: str,
+    recipient: str,
+    content: Dict[str, Any],
+    private_key: bytes,
+    extensions: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """构造多模态传输初始化信令（携带 BlobMetadata）。"""
+    return build_message(sender, recipient, "blob_init", content, private_key, extensions)
+
+
+def build_blob_chunk(
+    sender: str,
+    recipient: str,
+    content: Dict[str, Any],
+    private_key: bytes,
+    extensions: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """构造多模态分片数据帧。"""
+    return build_message(sender, recipient, "blob_chunk", content, private_key, extensions)
+
+
+def build_blob_ack(
+    sender: str,
+    recipient: str,
+    content: Dict[str, Any],
+    private_key: bytes,
+) -> Dict[str, Any]:
+    """构造分片确认/重传请求帧。"""
+    return build_message(sender, recipient, "blob_ack", content, private_key)
 
 
 def validate_message(

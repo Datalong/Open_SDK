@@ -19,6 +19,7 @@ Existing AI agents are trapped in centralized API silos. A2Net solves the multi-
 2. 🔒 **Zero-Knowledge E2EE**: All agent-to-agent queries and responses are encrypted end-to-end (`X25519-HKDF-AES-256-GCM`). Network relays only see encrypted envelopes and routing headers.
 3. 🧩 **Byte-Level Cross-Language Interop**: Built on RFC 8785 Canonical JSON, ensuring identical cryptographic signatures across TypeScript and Python runtimes.
 4. 🔎 **Decentralized Discovery**: Standardized ANP-07/08 Agent Cards allow agents to dynamically crawl, verify, and invoke external capabilities.
+5. 📦 **Encrypted Multimodal Blobs**: 64KB chunked streaming for images, audio and documents, layered with E2EE and per-chunk + whole-file SHA-256 verification — no single-frame size limits.
 
 ---
 
@@ -34,7 +35,9 @@ Open_SDK/
 │   └── python/           # 🐍 开源 Python 客户端 SDK (a2net-client)
 ├── examples/             # 🚀 快速上手演示代码 (TS & Python)
 │   ├── typescript-quickstart.ts
-│   └── python-quickstart.py
+│   ├── typescript-multimodal.ts   # 多模态分块加密传输演示
+│   ├── python-quickstart.py
+│   └── python-multimodal.py
 ├── LICENSE               # MIT 开源许可证
 └── README.md             # 本文档
 ```
@@ -42,6 +45,10 @@ Open_SDK/
 ---
 
 ## 🚀 5-Minute Quickstart
+
+> 本仓库为 npm workspace monorepo。根目录执行 `npm install` 即可安装 TS SDK 与示例依赖，
+> 本地自建中继后可直接跑通示例：`npm run example:ts` / `npm run example:py` /
+> `npm run example:ts:multimodal` / `npm run example:py:multimodal`。
 
 ### 1. TypeScript / JavaScript
 
@@ -56,7 +63,7 @@ import WebSocket from 'ws';
 import { A2NetClient } from '@a2net/client';
 
 const agent = new A2NetClient({
-  relayUrl: 'wss://relay.a2net.network', // 或你的本地自建中继 ws://localhost:8080
+  relayUrl: 'ws://127.0.0.1:8080', // 本地自建中继，或你的公网 wss:// 中继
   encryptContent: true,                 // 启用原生端到端加密
   webSocketImpl: WebSocket as any,
 });
@@ -85,10 +92,14 @@ pip install -e ./sdks/python
 Run a Python Agent:
 ```python
 import asyncio
-from a2net import A2NetClient
+from a2net import A2NetClient, PermissionPolicy
 
 async def main():
-    agent = A2NetClient(relay_url="wss://relay.a2net.network", encrypt_content=True)
+    agent = A2NetClient(
+        relay_url="ws://127.0.0.1:8080",
+        encrypt_content=True,
+        permission_policy=PermissionPolicy(default_allow=True),
+    )
 
     async def handle_query(query: str, sender: str, msg: dict) -> str:
         return f"Python Agent 回复: {query}"

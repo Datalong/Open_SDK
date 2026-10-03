@@ -172,26 +172,23 @@ export class A2NetClient extends EventEmitter {
       }
 
       this.ws.onopen = () => {
-        this.connected = true;
-        this.reconnectAttempts = 0;
-        this.startHeartbeat();
-        this.emit('connected', undefined);
-
-        // 发送注册握手
-        const hello = buildPing(this.address, this.address, this.keyPair.privateKey);
-        this.sendRaw(hello);
-
-        if (!settled) {
-          settled = true;
-          resolve();
-        }
+        this.emit('open', undefined);
+        // 向中继发送注册握手（携带 did:key 地址与能力标签）
+        this.ws?.send(
+          JSON.stringify({
+            type: 'register',
+            address: this.address,
+            apiKey: this.apiKey,
+            capabilities: ['a2net.stream.v1', 'a2net.tool_call.v1'],
+          })
+        );
       };
 
       this.ws.onclose = (ev: any) => {
         const wasConnected = this.connected;
         this.connected = false;
         this.stopHeartbeat();
-        this.emit('disconnected', ev);
+        if (wasConnected) this.emit('disconnected', ev);
         if (!settled) {
           settled = true;
           reject(new Error(`WebSocket closed before open (code ${ev?.code})`));
@@ -203,14 +200,42 @@ export class A2NetClient extends EventEmitter {
 
       this.ws.onerror = (err: any) => {
         this.emit('error', err);
+        if (!settled) {
+          settled = true;
+          reject(err instanceof Error ? err : new Error('WebSocket error'));
+        }
       };
 
       this.ws.onmessage = async (ev: any) => {
         try {
           const raw = typeof ev.data === 'string' ? ev.data : ev.data?.toString?.();
           if (!raw) return;
-          const msg = JSON.parse(raw);
-          await this.handleMessage(msg);
+          const msg = JSON.parse(raw) as Record<string, any>;
+
+          // 中继控制平面：注册确认
+          if (msg.type === 'register_ack') {
+            if (msg.status === 'error') {
+              const err = new Error(`Register failed: ${msg.reason ?? 'unknown'}`);
+              if (!settled) {
+                settled = true;
+                reject(err);
+              }
+              this.emit('error', err);
+              return;
+            }
+            this.connected = true;
+            this.reconnectAttempts = 0;
+            this.startHeartbeat();
+            this.emit('connect', undefined);
+            if (!settled) {
+              settled = true;
+              resolve();
+            }
+            return;
+          }
+          if (msg.type === 'pong') return;
+
+          await this.handleMessage(msg as unknown as A2Message);
         } catch (err) {
           this.emit('error', err);
         }
@@ -437,7 +462,11 @@ export class A2NetClient extends EventEmitter {
 
       if (this.encryptContent || msg.extensions?.e2ee === true) {
         const cipher = await encryptFor(msg.from, JSON.stringify(resp.content));
-        resp.content = cipher as any;
+        // 重新构造并签名（签名覆盖 content，替换为密文后必须重新签署）
+        resp = buildMessage(
+          { from: resp.from, to: resp.to, type: 'response', content: cipher as unknown as Record<string, unknown> },
+          this.keyPair.privateKey
+        );
         resp.extensions = { ...(resp.extensions ?? {}), e2ee: true };
       }
 

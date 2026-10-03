@@ -23,18 +23,15 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-          cache-dependency-path: 'sdks/typescript/package.json'
+          cache-dependency-path: 'package-lock.json'
 
-      - name: Install dependencies
-        working-directory: sdks/typescript
+      - name: Install workspace dependencies
         run: npm ci || npm install
 
       - name: Build TypeScript Client
-        working-directory: sdks/typescript
         run: npm run build
 
       - name: Run Vitest Suite
-        working-directory: sdks/typescript
         run: npm test
 
   test-python:

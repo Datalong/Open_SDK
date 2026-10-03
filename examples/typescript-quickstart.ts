@@ -6,7 +6,7 @@ import WebSocket from 'ws';
 import { A2NetClient } from '../sdks/typescript/src/index.js';
 
 async function main() {
-  const RELAY_URL = process.env.A2NET_RELAY_URL || 'wss://relay.a2net.network';
+  const RELAY_URL = process.env.A2NET_RELAY_URL || 'ws://127.0.0.1:8080';
 
   // 1. 初始化服务端 Agent (Responder)
   const responder = new A2NetClient({

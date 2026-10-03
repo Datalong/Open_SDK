@@ -28,8 +28,17 @@ import websockets  # type: ignore
 
 from .crypto import KeyPair, generate_keypair
 from .e2ee import decrypt_from, encrypt_for, is_encrypted
+from .multimodal import (
+    BlobChunk,
+    BlobMetadata,
+    BlobTransferManager,
+    CompletedBlob,
+    split_blob_into_chunks,
+)
 from .protocol import (
     ErrorCode,
+    build_blob_chunk,
+    build_blob_init,
     build_error,
     build_message,
     build_response,
@@ -37,6 +46,7 @@ from .protocol import (
 )
 
 QueryHandler = Callable[[str, str, Dict[str, Any]], Union[str, Dict[str, Any], Awaitable[Any]]]
+BlobHandler = Callable[[CompletedBlob, str], Union[None, Awaitable[None]]]
 
 
 @dataclass
@@ -78,6 +88,8 @@ class A2NetClient:
         self._pending: Dict[str, asyncio.Future] = {}
         self._seen: set = set()
         self._query_handler: Optional[QueryHandler] = None
+        self._blob_handler: Optional[BlobHandler] = None
+        self._blob_manager = BlobTransferManager()
 
     # -- 基本信息 --------------------------------------------------------
     @property
@@ -90,6 +102,10 @@ class A2NetClient:
 
     def on_query(self, handler: QueryHandler) -> None:
         self._query_handler = handler
+
+    def on_blob(self, handler: BlobHandler) -> None:
+        """注册多模态文件接收回调: handler(completed_blob, sender_did)。"""
+        self._blob_handler = handler
 
     # -- 连接 ------------------------------------------------------------
     async def connect(self) -> None:
@@ -137,6 +153,61 @@ class A2NetClient:
             content = encrypt_for(target, json.dumps(content, ensure_ascii=False))  # type: ignore[assignment]
         msg = build_message(self.address, target, "query", content, self.keypair.private_key)
         return await self._send_and_wait(msg, timeout or self.request_timeout)
+
+    async def send_blob(
+        self,
+        target: str,
+        data: bytes,
+        name: str = "unnamed.bin",
+        mime_type: str = "application/octet-stream",
+        chunk_size: int = 64 * 1024,
+        on_progress: Optional[Callable[[int, int, int], None]] = None,
+    ) -> BlobMetadata:
+        """发送多模态二进制大文件（图片/音频/PDF），自动分块并支持端到端加密与进度回调。
+
+        :param on_progress: 回调 (progress_pct, chunk_index, total_chunks)
+        """
+        if not self._connected:
+            raise RuntimeError("Not connected")
+        if not data:
+            data = b""
+        metadata, chunks = split_blob_into_chunks(data, name, mime_type, chunk_size)
+
+        # 1. blob_init 协商元数据
+        init_payload: Dict[str, Any] = {"metadata": metadata.to_dict()}
+        init_content: Dict[str, Any] = init_payload
+        if self.encrypt_content:
+            init_content = encrypt_for(target, json.dumps(init_payload, ensure_ascii=False))
+        await self._send_raw(
+            build_blob_init(
+                self.address,
+                target,
+                init_content,
+                self.keypair.private_key,
+                extensions={"e2ee": self.encrypt_content},
+            )
+        )
+
+        # 2. 依次管道化发送分片
+        total = len(chunks)
+        for i, chunk in enumerate(chunks):
+            chunk_payload: Dict[str, Any] = {"chunk": chunk.to_dict()}
+            chunk_content: Dict[str, Any] = chunk_payload
+            if self.encrypt_content:
+                chunk_content = encrypt_for(target, json.dumps(chunk_payload, ensure_ascii=False))
+            await self._send_raw(
+                build_blob_chunk(
+                    self.address,
+                    target,
+                    chunk_content,
+                    self.keypair.private_key,
+                    extensions={"e2ee": self.encrypt_content},
+                )
+            )
+            if on_progress is not None:
+                on_progress(round((i + 1) / total * 100), i, total)
+
+        return metadata
 
     async def _send_and_wait(self, msg: Dict[str, Any], timeout: float) -> str:
         loop = asyncio.get_running_loop()
@@ -187,8 +258,33 @@ class A2NetClient:
 
         if msg["type"] == "query":
             await self._handle_query(msg)
+        elif msg["type"] == "blob_init":
+            self._handle_blob_init(msg)
+        elif msg["type"] == "blob_chunk":
+            await self._handle_blob_chunk(msg)
         elif msg["type"] in ("response", "error"):
             self._handle_reply(msg)
+
+    def _handle_blob_init(self, msg: Dict[str, Any]) -> None:
+        meta_dict = (msg.get("content") or {}).get("metadata")
+        if not meta_dict:
+            return
+        self._blob_manager.init_session(msg["from"], BlobMetadata.from_dict(meta_dict))
+
+    async def _handle_blob_chunk(self, msg: Dict[str, Any]) -> None:
+        chunk_dict = (msg.get("content") or {}).get("chunk")
+        if not chunk_dict:
+            return
+        try:
+            _, completed = self._blob_manager.handle_chunk(
+                msg["from"], BlobChunk.from_dict(chunk_dict)
+            )
+        except Exception:  # noqa: BLE001 - 分片校验失败不掎垮接收循环
+            return
+        if completed is not None and self._blob_handler is not None:
+            out = self._blob_handler(completed, msg["from"])
+            if inspect.isawaitable(out):
+                await out
 
     async def _handle_query(self, msg: Dict[str, Any]) -> None:
         if not self.policy.check(msg["from"]):

@@ -10,14 +10,18 @@ import sys
 # 将本地 Python SDK 路径加入查找
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'sdks', 'python'))
 
-from a2net import A2NetClient
+from a2net import A2NetClient, PermissionPolicy
 
 
 async def main():
-    relay_url = os.getenv('A2NET_RELAY_URL', 'wss://relay.a2net.network')
+    relay_url = os.getenv('A2NET_RELAY_URL', 'ws://127.0.0.1:8080')
 
-    # 1. 初始化服务端 Agent
-    responder = A2NetClient(relay_url=relay_url, encrypt_content=True)
+    # 1. 初始化服务端 Agent（开放调用：default_allow=True）
+    responder = A2NetClient(
+        relay_url=relay_url,
+        encrypt_content=True,
+        permission_policy=PermissionPolicy(default_allow=True),
+    )
 
     async def handle_query(query: str, sender: str, msg: dict) -> str:
         print(f"[Responder] 收到来自 {sender[:16]}... 的加密消息: '{query}'")
@@ -37,8 +41,8 @@ async def main():
     reply = await caller.query(responder.address, "跨语言智能体互操作性测试")
     print(f"\n[Caller] 收到解密响应: '{reply}'")
 
-    await caller.disconnect()
-    await responder.disconnect()
+    await caller.close()
+    await responder.close()
 
 
 if __name__ == '__main__':
