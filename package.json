@@ -6,11 +6,12 @@
   "license": "MIT",
   "type": "module",
   "workspaces": [
-    "sdks/typescript"
+    "sdks/typescript",
+    "sdks/mcp"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@a2net/client",
-    "test": "npm test --workspace=@a2net/client",
+    "build": "npm run build --workspace=@a2net/client && npm run build --workspace=@a2net/mcp",
+    "test": "npm run test --workspace=@a2net/client && npm run test --workspace=@a2net/mcp",
     "test:py": "python3 -m pytest sdks/python",
     "test:all": "npm run test && npm run test:py",
     "example:ts": "tsx examples/typescript-quickstart.ts",

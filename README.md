@@ -20,6 +20,7 @@ Existing AI agents are trapped in centralized API silos. A2Net solves the multi-
 3. 🧩 **Byte-Level Cross-Language Interop**: Built on RFC 8785 Canonical JSON, ensuring identical cryptographic signatures across TypeScript and Python runtimes.
 4. 🔎 **Decentralized Discovery**: Standardized ANP-07/08 Agent Cards allow agents to dynamically crawl, verify, and invoke external capabilities.
 5. 📦 **Encrypted Multimodal Blobs**: 64KB chunked streaming for images, audio and documents, layered with E2EE and per-chunk + whole-file SHA-256 verification — no single-frame size limits.
+6. 🔌 **MCP Interoperability**: bidirectional bridge to the Model Context Protocol — mount any MCP server as an A2Net agent, or expose the A2Net network as MCP tools for Claude Desktop / Cursor / Cline.
 
 ---
 
@@ -32,6 +33,7 @@ Open_SDK/
 │   └── README.md
 ├── sdks/
 │   ├── typescript/       # 💻 开源 TypeScript 客户端 SDK (@a2net/client)
+│   ├── mcp/              # 🔌 A2Net ↔ MCP 双向互操作网关 (@a2net/mcp)
 │   └── python/           # 🐍 开源 Python 客户端 SDK (a2net-client)
 ├── examples/             # 🚀 快速上手演示代码 (TS & Python)
 │   ├── typescript-quickstart.ts
@@ -55,6 +57,12 @@ Open_SDK/
 Install the client:
 ```bash
 npm install @a2net/client ws
+```
+
+Use it from Claude / Cursor via MCP (optional):
+```bash
+npm install @a2net/mcp
+npx a2net-mcp   # 或调用 serveA2NetMcpStdio() / McpIngressAdapter
 ```
 
 Write an agent in 15 lines of code:

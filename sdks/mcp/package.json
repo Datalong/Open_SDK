@@ -1,0 +1,58 @@
+{
+  "name": "@a2net/mcp",
+  "version": "0.1.0",
+  "description": "Open-Source A2Net ↔ MCP (Model Context Protocol) bidirectional interoperability gateway",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "a2net",
+    "mcp",
+    "model-context-protocol",
+    "agent",
+    "did",
+    "e2ee",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Datalong/Open_SDK.git",
+    "directory": "sdks/mcp"
+  },
+  "homepage": "https://github.com/Datalong/Open_SDK#readme",
+  "bugs": {
+    "url": "https://github.com/Datalong/Open_SDK/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@a2net/client": "0.1.0",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  }
+}
