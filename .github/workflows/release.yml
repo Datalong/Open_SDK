@@ -48,62 +48,106 @@ jobs:
           pip install -e ".[dev]" pytest pytest-asyncio
           pytest -v
 
-  publish-npm:
-    name: Publish @a2net/client to npm
+  # ── 发布前体检：产物不可用就不发 ──
+  preflight:
+    name: Release Preflight (pack / install / use)
     needs: test
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: Preflight
+        run: bash scripts/preflight-release.sh
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+  # ── ① 先发 @a2net/client（@a2net/mcp 依赖它，顺序不可颠倒）──
+  publish-npm-client:
+    name: Publish @a2net/client (npm, with provenance)
+    needs: preflight
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    permissions:
+      contents: read
+      id-token: write # Sigstore provenance 必需
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22.x
           registry-url: 'https://registry.npmjs.org'
-
-      - name: Install & Build
-        working-directory: sdks/typescript
+      - working-directory: sdks/typescript
         run: |
           npm ci || npm install
           npm run build
-
-      - name: Publish to npm
+      - name: Publish with provenance
         working-directory: sdks/typescript
+        # --provenance 会生成 Sigstore 签名的构建来源证明，
+        # 用户可用 `npm audit signatures` 验证产物确实来自本仓库该次提交
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  # ── ② 再发 a2net-client 到 PyPI（Trusted Publishing + attestation）──
   publish-pypi:
-    name: Publish a2net-client to PyPI
-    needs: test
+    name: Publish a2net-client (PyPI, with attestations)
+    needs: publish-npm-client
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    permissions:
+      contents: read
+      id-token: write # PyPI attestation（Sigstore）必需
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Build Python distribution
-        working-directory: sdks/python
+      - working-directory: sdks/python
         run: |
           python -m pip install --upgrade pip build
           python -m build
-
-      - name: Publish to PyPI
+      - name: Publish to PyPI with attestations
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: sdks/python/dist
+          # attestations: true 会上传 Sigstore 签名的 PEP 740 证明，
+          # 用户可用 `pip install --require-hashes` + pypi-attestations 验证来源
+          attestations: true
           password: ${{ secrets.PYPI_TOKEN }}
+
+  # ── ③ 最后发 @a2net/mcp（依赖 ①，顺序不可颠倒）──
+  publish-npm-mcp:
+    name: Publish @a2net/mcp (npm, with provenance)
+    needs: publish-npm-client
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: 'https://registry.npmjs.org'
+      - working-directory: sdks/mcp
+        run: |
+          npm ci || npm install
+          npm run build
+      - name: Publish with provenance
+        working-directory: sdks/mcp
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   create-release:
     name: Create GitHub Release
-    needs: [publish-npm, publish-pypi]
+    needs: [publish-npm-mcp, publish-pypi]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:

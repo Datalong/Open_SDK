@@ -67,6 +67,55 @@ def _derive_key(shared: bytes, epk: bytes, recipient_pub: bytes) -> bytes:
     ).derive(shared)
 
 
+# ───────────────────────────────────────────────────────────────────────────
+# 明文长度填充（与 TS 端逐字节一致）
+#
+# 为什么要填充：密文的**长度**本身会泄露信息。2KB 的查询与 200KB 的应答，
+# 即使内容全加密，长度也足以让中继推断出"这是长文本生成"而非"短问答"。
+#
+# 为什么用分级桶而非定长：定长（一律 64KB）会把 100 字节的 ping 放大 640 倍。
+# 分级桶在"抹平特征"与"控制开销"之间取平衡。
+#
+# 为什么用随机字节而非零填充：AES-GCM 密文本身已不可区分，但零填充在
+# 其他实现（如非 AEAD）下会暴露填充边界。随机填充更保守。
+# ───────────────────────────────────────────────────────────────────────────
+
+# 上限刻意设在 16KB：填充收益随载荷增大而递减，代价却线性增长。
+# 超过上限则**不填充**（多模态 64KB 分片本就定长，填充到 256KB 会造成 4 倍膨胀
+# 却几乎换不到隐私收益）。详见 TS 端同名常量的说明。
+PAD_BUCKETS = (256, 1024, 4096, 16384)
+_PAD_LEN_BYTES = 4
+
+
+def padded_length(plaintext_bytes: int) -> int:
+    """按分级桶计算填充后的目标长度；**返回 0 表示不填充**（已超过最大桶）。"""
+    need = plaintext_bytes + _PAD_LEN_BYTES
+    for b in PAD_BUCKETS:
+        if need <= b:
+            return b
+    return 0
+
+
+def pad_plaintext(plaintext: bytes) -> bytes:
+    """明文 → 填充后字节（[4B 大端原长][明文][随机填充]）；无需填充时原样返回。"""
+    target = padded_length(len(plaintext))
+    if target == 0:
+        return plaintext
+    body = plaintext + os.urandom(target - len(plaintext) - _PAD_LEN_BYTES)
+    return len(plaintext).to_bytes(_PAD_LEN_BYTES, "big") + body
+
+
+def unpad_plaintext(padded: bytes) -> bytes:
+    """填充后字节 → 明文。异常输入一律抛错，绝不返回"看起来像原文"的错数据。"""
+    if len(padded) < _PAD_LEN_BYTES:
+        raise ValueError("填充数据过短，无法解析长度前缀")
+    orig_len = int.from_bytes(padded[:_PAD_LEN_BYTES], "big")
+    avail = len(padded) - _PAD_LEN_BYTES
+    if orig_len > avail:
+        raise ValueError("填充长度前缀非法: 声称 %d 字节，但实际只有 %d 字节" % (orig_len, avail))
+    return padded[_PAD_LEN_BYTES : _PAD_LEN_BYTES + orig_len]
+
+
 def encrypt_for(
     recipient_address: str,
     plaintext: str,
@@ -82,8 +131,14 @@ def encrypt_for(
 
     key = _derive_key(shared, eph_pub, recipient_pub)
     iv = os.urandom(12)
-    ct = AESGCM(key).encrypt(iv, plaintext.encode("utf-8"), None)
-    return {"alg": E2EE_ALG, "epk": _b64(eph_pub), "iv": _b64(iv), "ct": _b64(ct)}
+    # 加密前做长度填充；仅当真的填充过才标记 pad=True
+    raw = plaintext.encode("utf-8")
+    padded = pad_plaintext(raw)
+    ct = AESGCM(key).encrypt(iv, padded, None)
+    out = {"alg": E2EE_ALG, "epk": _b64(eph_pub), "iv": _b64(iv), "ct": _b64(ct)}
+    if len(padded) != len(raw):
+        out["pad"] = True
+    return out
 
 
 def decrypt_from(sender_address: str, envelope: Dict[str, str], recipient_private_key: bytes) -> str:
@@ -102,6 +157,9 @@ def decrypt_from(sender_address: str, envelope: Dict[str, str], recipient_privat
     key = _derive_key(shared, epk, recipient_pub)
 
     pt = AESGCM(key).decrypt(_unb64(envelope["iv"]), _unb64(envelope["ct"]), None)
+    # 仅当发送方标记了填充才解填充 —— 旧格式（无 pad 字段）按原样解码
+    if envelope.get("pad") is True:
+        pt = unpad_plaintext(pt)
     return pt.decode("utf-8")
 
 

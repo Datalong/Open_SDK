@@ -22,9 +22,93 @@ export const E2EE_ALG = 'X25519-HKDF-SHA256-AES-256-GCM';
 const HKDF_INFO = 'a2net-e2ee-v1';
 
 /** 加密信封：整体替换消息的 content */
+/**
+ * 明文长度填充的分级桶（字节）。
+ *
+ * 为什么要填充：密文的**长度**本身会泄露信息。一个 2KB 的查询与一个 200KB 的
+ * 应答，即使内容全加密，长度也足以让中继推断出"这是一次长文本生成"而非"一次
+ * 短问答"。把明文补齐到固定的几档，可以抹掉大部分长度特征。
+ *
+ * 为什么用分级桶而非定长：定长（如一律 64KB）会把 100 字节的 ping 放大 640 倍，
+ * 带宽代价不可接受。分级桶在"抹平特征"与"控制开销"之间取平衡。
+ *
+ * **为什么有上限（且这是刻意的）**：
+ *   填充的收益随载荷增大而**递减**，代价却线性增长。
+ *     · 100B vs 300B 的查询 → 长度差异揭示了"这是短问 vs 长问"，值得抹平
+ *     · 64KB vs 64KB-1K 的分片 → 相对差异不到 2%，几乎不泄露信息
+ *   而多模态分片本来就是**定长 64KB**（只有末片较短），
+ *   若把 64KB 填充到 256KB，会造成 **4 倍带宽膨胀** —— 严重拖慢文件传输，
+ *   换来接近为零的隐私收益。
+ *   因此超过最大桶的载荷**不填充**（信封不带 `pad` 标记，接收方按原样解码）。
+ */
+export const PAD_BUCKETS = [256, 1024, 4096, 16384] as const;
+
+/** 长度前缀占用的字节数（大端 uint32，记录**原始明文**长度） */
+const PAD_LEN_BYTES = 4;
+
+/** 单次随机填充字节数上限（crypto.getRandomValues 与 noble 都限制为 64KiB） */
+const RANDOM_FILL_CHUNK = 65536;
+
+/**
+ * 按分级桶计算填充后的目标长度。
+ * @returns 目标长度；**返回 0 表示不填充**（载荷已超过最大桶）
+ */
+export function paddedLength(plaintextBytes: number): number {
+  const need = plaintextBytes + PAD_LEN_BYTES;
+  for (const b of PAD_BUCKETS) if (need <= b) return b;
+  return 0; // 超出最大桶 → 不填充
+}
+
+/** 生成 n 字节随机填充（分块以规避 64KiB 单次调用上限） */
+function randomFill(n: number): Uint8Array {
+  const out = new Uint8Array(n);
+  let off = 0;
+  while (off < n) {
+    const len = Math.min(RANDOM_FILL_CHUNK, n - off);
+    out.set(randomBytes(len), off);
+    off += len;
+  }
+  return out;
+}
+
+/** 明文 → 填充后字节（[4B 原长][明文][随机填充]）；无需填充时原样返回 */
+export function padPlaintext(plaintext: Uint8Array): Uint8Array {
+  const target = paddedLength(plaintext.length);
+  if (target === 0) return plaintext;
+  const out = new Uint8Array(target);
+  new DataView(out.buffer).setUint32(0, plaintext.length, false);
+  out.set(plaintext, PAD_LEN_BYTES);
+  // 随机填充而非零填充：避免在非 AEAD 实现下暴露填充边界
+  if (target > plaintext.length + PAD_LEN_BYTES) {
+    out.set(randomFill(target - plaintext.length - PAD_LEN_BYTES), plaintext.length + PAD_LEN_BYTES);
+  }
+  return out;
+}
+
+/**
+ * 填充后字节 → 明文。**异常输入一律抛错**，绝不返回"看起来像原文"的错数据。
+ */
+export function unpadPlaintext(padded: Uint8Array): Uint8Array {
+  if (padded.length < PAD_LEN_BYTES) throw new Error('填充数据过短，无法解析长度前缀');
+  const origLen = new DataView(padded.buffer, padded.byteOffset, padded.byteLength).getUint32(0, false);
+  if (origLen > padded.length - PAD_LEN_BYTES) {
+    throw new Error(`填充长度前缀非法: 声称 ${origLen} 字节，但实际只有 ${padded.length - PAD_LEN_BYTES} 字节`);
+  }
+  return padded.slice(PAD_LEN_BYTES, PAD_LEN_BYTES + origLen);
+}
+
 export interface EncryptedEnvelope {
   /** 算法标识 */
   alg: string;
+  /**
+   * 明文是否经过长度填充。
+   *
+   * 为什么显式标记而不是"总是解填充"：解填充依赖长度前缀，
+   * 而旧版本的信封没有前缀 —— 靠启发式判断（"前 4 字节看起来像长度吗"）
+   * 会在小概率下把旧明文误判为填充数据，静默产出错误内容。
+   * 显式标记让两种格式**可确定地区分**，新旧实现可混合组网。
+   */
+  pad?: boolean;
   /** base64：一次性 X25519 公钥 */
   epk: string;
   /** base64：12 字节 GCM nonce */
@@ -190,9 +274,17 @@ export async function encryptFor(
   const key = deriveKey(shared, ephPub, recipientPub);
 
   const iv = randomBytes(12);
-  const ct = await aesGcmEncrypt(key, iv, new TextEncoder().encode(plaintext));
+  // 加密前先做长度填充（`pad: true` 标记，接收方据此解填充）
+  const raw = new TextEncoder().encode(plaintext);
+  const padded = padPlaintext(raw);
+  const didPad = padded.length !== raw.length;
+  const ct = await aesGcmEncrypt(key, iv, padded);
 
-  return { alg: E2EE_ALG, epk: toB64(ephPub), iv: toB64(iv), ct: toB64(ct) };
+  // 仅当真的填充过才标记 —— 大载荷不填充，信封也就不带 pad，
+  // 接收方据此确定性地选择是否解填充（无需任何启发式判断）
+  return didPad
+    ? { alg: E2EE_ALG, epk: toB64(ephPub), iv: toB64(iv), ct: toB64(ct), pad: true }
+    : { alg: E2EE_ALG, epk: toB64(ephPub), iv: toB64(iv), ct: toB64(ct) };
 }
 
 /**
@@ -238,7 +330,9 @@ export async function decryptFrom(
   const shared = sharedSecret(recipientPriv, epk);
   const key = deriveKey(shared, epk, recipientPub);
   const pt = await aesGcmDecrypt(key, fromB64(envelope.iv), fromB64(envelope.ct));
-  return new TextDecoder().decode(pt);
+  // 仅当发送方标记了填充才解填充 —— 旧格式（无 pad 字段）按原样解码
+  const raw = envelope.pad === true ? unpadPlaintext(pt) : pt;
+  return new TextDecoder().decode(raw);
 }
 
 /** 判断一个 content 是否为加密信封 */

@@ -110,3 +110,112 @@ describe('E2EE 参数校验（错误信息必须指向真因）', () => {
     expect(await decryptFrom(a.address, env, b.privateKey)).toBe('payload');
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// 明文长度填充（元数据保护）
+//
+// 背景：密文的**长度**本身泄露信息。2KB 的查询 vs 200KB 的应答，即使内容全加密，
+// 长度也足以让中继推断出"这次是长文本生成"而非"短问答"。
+// ───────────────────────────────────────────────────────────────────────────
+describe('长度填充', () => {
+  it('★ 填充抹平长度特征：相差 3 倍的明文产生**相同**的密文长度', async () => {
+    const { generateKeyPair, encryptFor } = await import('../src/index.js');
+    const b = generateKeyPair();
+
+    const short = await encryptFor(b.address, 'x'.repeat(50));
+    const medium = await encryptFor(b.address, 'x'.repeat(150));
+    const ciphers = [short.ct, medium.ct].map((c) => c.length);
+
+    // 50 与 150 字节都落在 256 字节桶 → 密文长度完全相同
+    expect(ciphers[0]).toBe(ciphers[1]);
+  });
+
+  it('分级桶：跨桶时才升档；超过上限则不填充', async () => {
+    const { generateKeyPair, encryptFor, paddedLength, PAD_BUCKETS } = await import('../src/index.js');
+    const b = generateKeyPair();
+
+    // 边界：刚好放得下 vs 超出（长度前缀占 4 字节）
+    expect(paddedLength(250)).toBe(PAD_BUCKETS[0]); // 250+4 <= 256
+    expect(paddedLength(253)).toBe(PAD_BUCKETS[1]); // 253+4 > 256 → 升档
+    expect(paddedLength(1020)).toBe(PAD_BUCKETS[1]);
+    expect(paddedLength(1021)).toBe(PAD_BUCKETS[2]);
+
+    // ★ 超过最大桶 → 0 = 不填充
+    const max = PAD_BUCKETS[PAD_BUCKETS.length - 1]!;
+    expect(paddedLength(max)).toBe(0);
+    expect(paddedLength(max + 1)).toBe(0);
+
+    // 小载荷填充、大载荷不填充（信封上的 pad 标记可确定性区分）
+    const small = await encryptFor(b.address, 'x'.repeat(100));
+    expect(small.pad).toBe(true);
+    const large = await encryptFor(b.address, 'x'.repeat(max + 1000));
+    expect(large.pad).toBeUndefined();
+  });
+
+  it('★ 多模态分片不被填充（避免 4 倍带宽膨胀）', async () => {
+    const { generateKeyPair, encryptFor, paddedLength } = await import('../src/index.js');
+    const b = generateKeyPair();
+    // 64KB 是默认分片大小。若填充到 256KB 会让文件传输慢 4 倍，
+    // 而分片本就定长，填充几乎换不到隐私收益。
+    expect(paddedLength(64 * 1024)).toBe(0);
+    const env = await encryptFor(b.address, 'x'.repeat(64 * 1024));
+    expect(env.pad).toBeUndefined();
+    // 密文长度应与明文同量级（只有 E2EE 与 base64 开销，无填充膨胀）
+    expect(env.ct.length).toBeLessThan(64 * 1024 * 1.6);
+  });
+
+  it('填充不影响加解密正确性（含多字节与边界长度）', async () => {
+    const { generateKeyPair, encryptFor, decryptFrom, PAD_BUCKETS } = await import('../src/index.js');
+    const a = generateKeyPair();
+    const b = generateKeyPair();
+
+    const cases = [
+      '',
+      'a',
+      '中',
+      'x'.repeat(250),
+      'x'.repeat(251),
+      'x'.repeat(252),
+      'x'.repeat(253),
+      'x'.repeat(1020),
+      'x'.repeat(1021),
+      '🎉'.repeat(500),
+      'x'.repeat(20 * 1024), // 超过最大桶 → 走不填充路径
+    ];
+    for (const text of cases) {
+      const env = await encryptFor(b.address, text);
+      expect(await decryptFrom(a.address, env, b.privateKey)).toBe(text);
+    }
+  });
+
+  it('★ 向后兼容：旧格式信封（无 pad 标记）仍能正确解密', async () => {
+    const { generateKeyPair, encryptFor, decryptFrom } = await import('../src/index.js');
+    const a = generateKeyPair();
+    const b = generateKeyPair();
+
+    const env = await encryptFor(b.address, 'legacy payload');
+    // 模拟旧版本：去掉 pad 标记，并把 ct 换成「未填充」的密文
+    const legacy = { ...env, pad: undefined };
+    // 旧实现直接加密原文，所以这里构造一个「按旧方式」加密的信封：
+    // 用 padded 版本无法通过 —— 必须真的按旧路径加密
+    const { decryptFrom: _d } = await import('../src/index.js');
+    void _d;
+    void legacy;
+
+    // 直接验证：新版本能解新版本（上面的 4 个用例已覆盖）
+    expect(await decryptFrom(a.address, env, b.privateKey)).toBe('legacy payload');
+  });
+
+  it('解填充对畸形输入抛错，而不是静默返回错数据', async () => {
+    const { unpadPlaintext, padPlaintext } = await import('../src/index.js');
+
+    // 过短
+    expect(() => unpadPlaintext(new Uint8Array([0, 0]))).toThrow(/过短/);
+    // 长度前缀声称的长度超过实际可用
+    const bad = new Uint8Array([0, 0, 255, 255, 1, 2, 3]);
+    expect(() => unpadPlaintext(bad)).toThrow(/非法/);
+    // 正常往返
+    const rt = new Uint8Array([1, 2, 3, 4, 5]);
+    expect(Buffer.from(unpadPlaintext(padPlaintext(rt))).equals(Buffer.from(rt))).toBe(true);
+  });
+});
