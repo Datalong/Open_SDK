@@ -30,6 +30,10 @@ def create_agent_card(
     url: str,
     owner: Optional[Dict[str, Any]] = None,
     relay: Optional[str] = None,
+    # 卡片上的**公示报价**（对外宣告"我收多少"）。
+    # 形状为 {"unit": "sat", "amount": 100, "payee": "..."}。
+    # 注意与"怎么算钱"（计费规则）是两回事 —— TS 端分别命名为
+    # CardPricing 与 BillingRule，Python 端为无类型 Dict，此处仅作说明。
     pricing: Optional[Dict[str, Any]] = None,
     capabilities: Optional[List[str]] = None,
     information: Optional[List[Dict[str, Any]]] = None,
@@ -122,3 +126,53 @@ def resolve_agent_card(url: str, timeout: float = 10.0) -> Dict[str, Any]:
     if not verify_agent_card(card):
         raise ValueError("Agent Description 签名无效")
     return card
+
+
+# ---------------------------------------------------------------------------
+# Agent Card 字段校验（与 TS 端 validateAgentCard 对齐）
+# ---------------------------------------------------------------------------
+# 硬性要求：缺失则卡片不可用于发现与调用。
+# 与 create_agent_card 的参数约束**互补而非重复**：
+#   · 参数约束引导有类型的调用方
+#   · 本函数兜住无类型的调用方（手写 JSON / 第三方实现）
+AGENT_CARD_REQUIRED_FIELDS = ("type", "did", "name", "description", "url", "created")
+AGENT_CARD_RECOMMENDED_FIELDS = ("relay", "capabilities", "pricing")
+
+
+def validate_agent_card(card: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """校验一张 Agent Card 的字段完整性与签名。
+
+    返回 ``{"valid": bool, "missing": [...], "warnings": [...], "signed": bool}``。
+
+    只做**形状与签名**校验，不校验字段语义（如 relay 是否真能连通）。
+    """
+    missing: List[str] = []
+    warnings: List[str] = []
+
+    if not isinstance(card, dict):
+        return {
+            "valid": False,
+            "missing": list(AGENT_CARD_REQUIRED_FIELDS),
+            "warnings": list(AGENT_CARD_RECOMMENDED_FIELDS),
+            "signed": False,
+        }
+
+    for f in AGENT_CARD_REQUIRED_FIELDS:
+        v = card.get(f)
+        if v is None or (isinstance(v, str) and not v.strip()):
+            missing.append(f)
+    if "type" not in missing and card.get("type") != "AgentDescription":
+        missing.append("type")
+
+    for f in AGENT_CARD_RECOMMENDED_FIELDS:
+        v = card.get(f)
+        if v is None or (isinstance(v, (list, dict)) and len(v) == 0):
+            warnings.append(f)
+
+    signed = isinstance(card.get("proof"), dict)
+    return {
+        "valid": (not missing) and signed and verify_agent_card(card),
+        "missing": missing,
+        "warnings": warnings,
+        "signed": signed,
+    }

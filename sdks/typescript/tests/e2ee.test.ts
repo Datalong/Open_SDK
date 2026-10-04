@@ -75,3 +75,38 @@ describe('e2ee', () => {
     expect(encryptionPublicKeyFromAddress(kp.address).length).toBe(32);
   });
 });
+
+describe('E2EE 参数校验（错误信息必须指向真因）', () => {
+  it('★ 参数序写错时给出可执行的提示，而不是误导性的"算法不支持"', async () => {
+    const { generateKeyPair, encryptFor, decryptFrom } = await import('../src/index.js');
+    const a = generateKeyPair();
+    const b = generateKeyPair();
+    const env = await encryptFor(b.address, 'x');
+
+    // 常见误用：把信封当成第一个参数（以为签名是 (envelope, key, addr)）
+    await expect(
+      decryptFrom(env as never, b.privateKey, a.address as never)
+    ).rejects.toThrow(/第一个参数必须是发送方地址字符串/);
+
+    // 第二个参数传错
+    await expect(decryptFrom(a.address, 'not-an-envelope' as never, b.privateKey)).rejects.toThrow(
+      /第二个参数必须是加密信封对象/
+    );
+
+    // 第三个参数传错
+    await expect(decryptFrom(a.address, env, 'not-a-key' as never)).rejects.toThrow(
+      /第三个参数必须是收件人私钥/
+    );
+
+    // encryptFor 第一参数传错
+    await expect(encryptFor(env as never, 'x')).rejects.toThrow(/第一个参数必须是收件人地址字符串/);
+  });
+
+  it('参数序正确时正常往返', async () => {
+    const { generateKeyPair, encryptFor, decryptFrom } = await import('../src/index.js');
+    const a = generateKeyPair();
+    const b = generateKeyPair();
+    const env = await encryptFor(b.address, 'payload');
+    expect(await decryptFrom(a.address, env, b.privateKey)).toBe('payload');
+  });
+});

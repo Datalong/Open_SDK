@@ -157,6 +157,19 @@ export async function encryptFor(
   plaintext: string,
   ephemeralSeed?: Uint8Array
 ): Promise<EncryptedEnvelope> {
+  // 参数类型前置校验。
+  //
+  // 为什么值得专门做：这两个函数都收「地址字符串 + 二进制」，参数序容易记错。
+  // 实测把参数顺序写错时，原实现会一路跑到算法判断才报
+  //   `不支持的加密算法: undefined`
+  // —— 报的是密码学问题，真因却是参数类型不对，排障方向被完全带偏。
+  // 这里改为立刻报出**正确的调用形状**。
+  if (typeof recipientAddress !== 'string') {
+    throw new TypeError(
+      `encryptFor 第一个参数必须是收件人地址字符串，收到 ${typeof recipientAddress}。` +
+        `调用形状：encryptFor(recipientAddress, plaintext, ephemeralSeed?)`
+    );
+  }
   const recipientPub = encryptionPublicKeyFromAddress(recipientAddress);
   let ephPriv: Uint8Array;
   let ephPub: Uint8Array;
@@ -193,7 +206,30 @@ export async function decryptFrom(
   envelope: EncryptedEnvelope,
   recipientPrivateKey: Uint8Array
 ): Promise<string> {
-  if (envelope.alg !== E2EE_ALG) throw new Error(`不支持的加密算法: ${envelope.alg}`);
+  // 同上：参数序记错时给出可执行的提示，而不是把方向带向"算法不支持"
+  if (typeof senderAddress !== 'string') {
+    throw new TypeError(
+      `decryptFrom 第一个参数必须是发送方地址字符串，收到 ${typeof senderAddress}。` +
+        `调用形状：decryptFrom(senderAddress, envelope, recipientPrivateKey)`
+    );
+  }
+  if (!envelope || typeof envelope !== 'object') {
+    throw new TypeError(
+      `decryptFrom 第二个参数必须是加密信封对象，收到 ${typeof envelope}。` +
+        `调用形状：decryptFrom(senderAddress, envelope, recipientPrivateKey)`
+    );
+  }
+  if (!(recipientPrivateKey instanceof Uint8Array)) {
+    throw new TypeError(
+      `decryptFrom 第三个参数必须是收件人私钥 Uint8Array，收到 ${typeof recipientPrivateKey}。` +
+        `调用形状：decryptFrom(senderAddress, envelope, recipientPrivateKey)`
+    );
+  }
+  if (envelope.alg !== E2EE_ALG) {
+    throw new Error(
+      `不支持的加密算法: ${String(envelope.alg)}（期望 ${E2EE_ALG}）`
+    );
+  }
   if (!senderAddress.startsWith('did:key:')) throw new Error('senderAddress 必须是 did:key 地址');
   const recipientPriv = ed25519PrivToX25519(recipientPrivateKey);
   // 收件人自己算 X25519 公钥，保证与发送方的 HKDF salt 一致

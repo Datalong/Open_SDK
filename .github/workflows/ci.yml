@@ -60,3 +60,29 @@ jobs:
       - name: Run Pytest Suite
         working-directory: sdks/python
         run: pytest -v
+
+  # 发布前体检：验证**发布产物**真的可用
+  #
+  # 为什么单列一个 job：本地测试跑的是**源码**，不是**发布产物**。
+  # `files` 漏文件、`exports` 路径写错、缺运行时依赖、README/LICENSE 没进 tarball
+  # —— 这类缺陷只有"真的打包并安装"才暴露（历史上确实漏过 README 与 LICENSE）。
+  preflight-release:
+    name: Release Preflight (pack / install / use)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run release preflight
+        run: bash scripts/preflight-release.sh

@@ -18,6 +18,10 @@ export interface DirectoryEntry {
   lastSeen: number;
   sourceUrl?: string;
   tenantId?: string;
+  /** 卡片缺硬性字段（登记仍成功，仅打标记）；见 validateAgentCard */
+  incomplete?: boolean;
+  /** 缺失的硬性字段名 */
+  missingFields?: string[];
   verifiedOrg?: {
     organizationName: string;
     organizationDomain: string;
@@ -36,6 +40,8 @@ export interface DirectorySearchQuery {
   tenant?: string;
   /** 是否只查询具有企业蓝 V / 组织认证的 Agent */
   verifiedOnly?: boolean;
+  /** 只返回字段完整的卡片（过滤掉缺硬性字段的） */
+  completeOnly?: boolean;
   limit?: number;
   offset?: number;
 }

@@ -5,11 +5,14 @@ a2net — A2Net Python SDK
 （同一套 did:key 地址、canonical JSON 签名规范、消息格式、端到端加密）。
 """
 from .agent_card import (
+    AGENT_CARD_RECOMMENDED_FIELDS,
+    AGENT_CARD_REQUIRED_FIELDS,
     AGENT_DESCRIPTION_PATH,
     agent_description_url,
     create_agent_card,
     resolve_agent_card,
     sign_agent_card,
+    validate_agent_card,
     verify_agent_card,
 )
 from .client import A2NetClient, PermissionPolicy
