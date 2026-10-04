@@ -18,7 +18,8 @@
     "example:ts:multimodal": "tsx examples/typescript-multimodal.ts",
     "example:py": "python3 examples/python-quickstart.py",
     "example:py:multimodal": "python3 examples/python-multimodal.py",
-    "preflight": "bash scripts/preflight-release.sh"
+    "preflight": "bash scripts/preflight-release.sh",
+    "release": "bash scripts/release.sh"
   },
   "devDependencies": {
     "@types/ws": "^8.5.10",

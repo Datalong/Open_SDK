@@ -214,6 +214,20 @@ if [ "$ONLY" != "--npm-only" ]; then
 fi
 
 # ────────────────────────────────────────────────────────────────
+section "npm registry 配置"
+# ────────────────────────────────────────────────────────────────
+# 国内环境常把 ~/.npmrc 指向只读镜像。发布时必须显式指定官方源，
+# 否则 `npm publish` 会尝试往镜像写 —— 报错或发到错误的地方。
+CFG_REG="$(npm config get registry 2>/dev/null)"
+info "当前 registry: $CFG_REG"
+if [ "$CFG_REG" = "https://registry.npmjs.org/" ] || [ "$CFG_REG" = "https://registry.npmjs.org" ]; then
+  ok "指向官方 registry"
+else
+  printf "  ${Y}!${N} 非官方 registry（多为只读镜像）—— 发布时**必须**显式加 --registry=https://registry.npmjs.org\n"
+  info "scripts/release.sh 已硬编码官方源，无需手动处理"
+fi
+
+# ────────────────────────────────────────────────────────────────
 section "版本一致性"
 # ────────────────────────────────────────────────────────────────
 VERSIONS="$(node -e "
